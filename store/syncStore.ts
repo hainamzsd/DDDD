@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { supabase } from '../services/supabase';
 import * as FileSystem from 'expo-file-system';
+import { compressImage } from '../services/survey';
 
 interface SyncQueueItem {
   id: string;
@@ -35,6 +36,10 @@ interface SyncState {
   updateQueueItem: (id: string, updates: Partial<SyncQueueItem>) => Promise<void>;
   loadQueue: () => Promise<void>;
   sync: () => Promise<void>;
+  syncItem: (item: SyncQueueItem) => Promise<void>;
+  syncSurvey: (surveyData: any) => Promise<any>;
+  syncMedia: (mediaData: any) => Promise<any>;
+  syncVertices: (verticesData: any) => Promise<any>;
   setOnlineStatus: (isOnline: boolean) => void;
   clearError: () => void;
   getPendingCount: () => number;
@@ -195,32 +200,94 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     }
   },
 
-  // Sync survey data
+  // Sync complete survey data (location + photos + vertices)
   syncSurvey: async (surveyData: any) => {
-    const { data, error } = await supabase
+    // 1. Create location record
+    const { data: locationData, error: locationError } = await supabase
       .from('survey_locations')
       .insert({
-        client_local_id: surveyData.id,
+        client_local_id: surveyData.clientLocalId || surveyData.id,
         created_by: surveyData.createdBy,
-        province_code: surveyData.provinceCode,
-        district_code: surveyData.districtCode,
-        ward_code: surveyData.wardCode,
-        temp_name: surveyData.tempName,
-        description: surveyData.description,
-        object_type_code: surveyData.objectTypeCode,
-        raw_address: surveyData.rawAddress,
-        gps_point: surveyData.gpsPoint,
+        mission_id: surveyData.missionId || null,
+        province_code: surveyData.provinceCode || null,
+        district_code: surveyData.districtCode || null,
+        ward_code: surveyData.wardCode || null,
+        temp_name: surveyData.tempName || null,
+        description: surveyData.description || null,
+        object_type_code: surveyData.objectTypeCode || null,
+        land_use_type_code: surveyData.landUseTypeCode || null,
+        raw_address: surveyData.rawAddress || null,
+        house_number: surveyData.houseNumber || null,
+        street_name: surveyData.streetName || null,
+        gps_point: surveyData.gpsPoint as any,
         gps_accuracy_m: surveyData.gpsAccuracyM,
-        status: surveyData.status || 'draft',
-      })
+        gps_source: 'device',
+        status: 'pending',
+        submitted_at: surveyData.submittedAt || new Date().toISOString(),
+      } as any)
       .select()
       .single();
 
-    if (error) throw error;
-    if (!data) throw new Error('No data returned from survey insert');
+    if (locationError) throw locationError;
+    if (!locationData) throw new Error('No data returned from survey insert');
 
-    console.log('[SyncStore] Survey synced:', (data as any).id);
-    return data;
+    const locationId = (locationData as any).id;
+    console.log('[SyncStore] Location created:', locationId);
+
+    // 2. Upload photos
+    if (surveyData.photos && surveyData.photos.length > 0) {
+      for (const photo of surveyData.photos) {
+        try {
+          await get().syncMedia({
+            localUri: photo.localUri,
+            surveyLocationId: locationId,
+            mediaType: 'photo',
+            capturedAt: photo.capturedAt || new Date().toISOString(),
+          });
+        } catch (photoError) {
+          console.error('[SyncStore] Failed to upload photo:', photoError);
+          // Continue with other photos even if one fails
+        }
+      }
+    }
+
+    // 3. Save vertices if provided
+    if (surveyData.vertices && surveyData.vertices.length >= 3) {
+      try {
+        await get().syncVertices({
+          surveyLocationId: locationId,
+          vertices: surveyData.vertices,
+        });
+
+        // Update location with polygon
+        const verticesForPolygon = surveyData.vertices.map((v: any) => [v.lng, v.lat]);
+        const firstVertex = verticesForPolygon[0];
+        verticesForPolygon.push(firstVertex); // Close the polygon
+
+        const polygonGeoJSON = {
+          type: 'Polygon',
+          coordinates: [verticesForPolygon],
+        };
+
+        const { error: updateError } = await (supabase
+          .from('survey_locations')
+          .update as any)({
+            rough_area: polygonGeoJSON,
+            has_rough_area: true,
+          })
+          .eq('id', locationId);
+
+        if (updateError) console.warn('[SyncStore] Polygon update warning:', updateError);
+
+        console.log('[SyncStore] Polygon updated for location:', locationId);
+      } catch (vertexError) {
+        console.error('[SyncStore] Failed to save vertices:', vertexError);
+        // Non-critical error, continue
+      }
+    }
+
+    console.log('[SyncStore] Survey fully synced:', locationId);
+    return locationData;
   },
 
   // Sync media files
@@ -230,14 +297,20 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     // Upload file to Supabase Storage
     const fileName = `${surveyLocationId}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
+    // Compress image before upload if it's a photo
+    let uploadUri = localUri;
+    if (mediaType === 'photo' || !mediaType) {
+      uploadUri = await compressImage(localUri);
+    }
+
     // Read file
-    const fileInfo = await FileSystem.getInfoAsync(localUri);
+    const fileInfo = await FileSystem.getInfoAsync(uploadUri);
     if (!fileInfo.exists) {
       throw new Error('File not found');
     }
 
     // Convert file to blob
-    const response = await fetch(localUri);
+    const response = await fetch(uploadUri);
     const blob = await response.blob();
     const arrayBuffer = await new Response(blob).arrayBuffer();
 
@@ -260,7 +333,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         file_path: fileName,
         captured_at: capturedAt,
         gps_point: gpsPoint,
-      })
+      } as any)
       .select()
       .single();
 
@@ -284,7 +357,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('survey_vertices')
-      .insert(insertData)
+      .insert(insertData as any)
       .select();
 
     if (error) throw error;

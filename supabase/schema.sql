@@ -89,13 +89,28 @@ CREATE TABLE IF NOT EXISTS public.survey_locations (
   district_code TEXT NOT NULL,
   ward_code TEXT NOT NULL,
 
-  -- Location identification
+  -- Location identification (per Circular 02/2015/TT-BTNMT)
+  location_identifier TEXT UNIQUE, -- Format: PP-DD-CC-NNNNNN (auto-generated)
   temp_name TEXT,
   description TEXT,
   object_type_code TEXT,
+  land_use_type_code TEXT, -- Official code from ref_land_use_types (e.g., 'NNG.LUA', 'PNN.DO.TT')
   raw_address TEXT,
   house_number TEXT,
   street_name TEXT,
+  hamlet_village TEXT, -- Thôn/Ấp/Bản/Xóm
+
+  -- Optional cadastral fields (per Decree 43/2014/NĐ-CP)
+  land_plot_area_m2 REAL, -- Diện tích thửa đất (m²)
+  building_area_m2 REAL, -- Diện tích xây dựng (m²)
+  land_use_certificate_number TEXT, -- Số giấy chứng nhận QSDĐ
+
+  -- Owner/Representative information (optional but recommended)
+  owner_name TEXT,
+  owner_id_number TEXT, -- CCCD/CMND (9 or 12 digits)
+  owner_phone TEXT,
+  representative_name TEXT,
+  survey_notes TEXT,
 
   -- GPS data (using PostGIS GEOGRAPHY type for accurate distance calculations)
   gps_point GEOGRAPHY(Point, 4326),
@@ -126,6 +141,8 @@ CREATE INDEX IF NOT EXISTS idx_survey_locations_created_by ON public.survey_loca
 CREATE INDEX IF NOT EXISTS idx_survey_locations_mission ON public.survey_locations(mission_id);
 CREATE INDEX IF NOT EXISTS idx_survey_locations_status ON public.survey_locations(status);
 CREATE INDEX IF NOT EXISTS idx_survey_locations_ward ON public.survey_locations(ward_code);
+CREATE INDEX IF NOT EXISTS idx_survey_locations_location_id ON public.survey_locations(location_identifier);
+CREATE INDEX IF NOT EXISTS idx_survey_locations_land_use ON public.survey_locations(land_use_type_code);
 CREATE INDEX IF NOT EXISTS idx_survey_locations_gps ON public.survey_locations USING GIST(gps_point);
 CREATE INDEX IF NOT EXISTS idx_survey_locations_area ON public.survey_locations USING GIST(rough_area);
 
@@ -318,6 +335,45 @@ CREATE POLICY "Anyone can view admin units"
   USING (true);
 
 -- ============================================================================
+-- REFERENCE TABLE: LAND USE TYPES (CADASTRAL CATEGORIES)
+-- ============================================================================
+-- Vietnamese land use and cadastral categories per current regulations:
+-- - Land Law 2013 (Law No. 45/2013/QH13)
+-- - Decree 43/2014/NĐ-CP
+-- - Circular 02/2015/TT-BTNMT
+--
+-- IMPORTANT: Use official Vietnamese cadastral codes (not simplified codes):
+--   ✅ CORRECT: 'NNG.LUA', 'PNN.DO.TT', 'PNN.SXKD.CN', etc.
+--   ❌ WRONG:   'RES', 'COM', 'IND', 'AGR', etc.
+--
+-- Seed data: supabase/seed-land-use-types-official.sql
+-- Documentation: docs/CADASTRAL_REGULATIONS.md
+--
+CREATE TABLE IF NOT EXISTS public.ref_land_use_types (
+  code TEXT PRIMARY KEY, -- Official codes: NNG.*, PNN.*, CSD.*
+  name_vi TEXT NOT NULL,
+  description TEXT,
+  category TEXT, -- e.g., 'agricultural', 'residential', 'commercial', 'public', 'non-agricultural', 'unused'
+  parent_code TEXT, -- For hierarchical categories (e.g., 'PNN.DO.TT' has parent 'PNN.DO')
+  is_active BOOLEAN DEFAULT TRUE,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for hierarchy queries
+CREATE INDEX IF NOT EXISTS idx_land_use_parent ON public.ref_land_use_types(parent_code);
+CREATE INDEX IF NOT EXISTS idx_land_use_category ON public.ref_land_use_types(category);
+
+-- Make reference tables public readable
+ALTER TABLE public.ref_land_use_types ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view land use types"
+  ON public.ref_land_use_types FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- ============================================================================
 -- SYNC EVENTS TABLE
 -- ============================================================================
 -- Track synchronization events for debugging
@@ -358,6 +414,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to auto-generate location_identifier
+-- Format: PP-DD-CC-NNNNNN (e.g., 01-01-01-000123)
+-- Per Circular 02/2015/TT-BTNMT
+CREATE OR REPLACE FUNCTION generate_location_identifier()
+RETURNS TRIGGER AS $$
+DECLARE
+  next_seq INTEGER;
+  location_code TEXT;
+BEGIN
+  -- Only generate if not already set
+  IF NEW.location_identifier IS NULL THEN
+    -- Get the next sequence number for this ward
+    SELECT COALESCE(MAX(
+      CAST(SUBSTRING(location_identifier FROM 10 FOR 6) AS INTEGER)
+    ), 0) + 1
+    INTO next_seq
+    FROM public.survey_locations
+    WHERE ward_code = NEW.ward_code;
+
+    -- Format: PP-DD-CC-NNNNNN
+    location_code := NEW.province_code || '-' ||
+                     NEW.district_code || '-' ||
+                     NEW.ward_code || '-' ||
+                     LPAD(next_seq::TEXT, 6, '0');
+
+    NEW.location_identifier := location_code;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -367,6 +455,10 @@ CREATE TRIGGER update_survey_missions_updated_at BEFORE UPDATE ON public.survey_
 
 CREATE TRIGGER update_survey_locations_updated_at BEFORE UPDATE ON public.survey_locations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for auto-generating location_identifier
+CREATE TRIGGER generate_location_identifier_trigger BEFORE INSERT ON public.survey_locations
+  FOR EACH ROW EXECUTE FUNCTION generate_location_identifier();
 
 -- ============================================================================
 -- STORAGE BUCKETS (Run this in Supabase Dashboard > Storage)

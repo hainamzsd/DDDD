@@ -177,7 +177,7 @@ export const StartSurveyScreen: React.FC = () => {
         {/* Progress Indicator */}
         <View style={styles.progressSection}>
           <View style={styles.progressBar}>
-            <View style={[styles.progressStep, styles.progressStepActive]}>
+            <View style={styles.progressStep}>
               <View style={styles.progressDot} />
               <Label color="primary" style={styles.progressLabel}>
                 Thông tin
@@ -210,42 +210,46 @@ export const StartSurveyScreen: React.FC = () => {
           </Body>
 
           <View style={styles.typeGrid}>
-            {objectTypes.map((type) => (
-              <TouchableOpacity
-                key={type.code}
-                style={[
-                  styles.typeCard,
-                  selectedType === type.code ? styles.typeCardSelected : undefined,
-                ]}
-                onPress={() => handleSelectType(type.code)}
-                activeOpacity={0.7}
-              >
-                <Badge
-                  variant={selectedType === type.code ? 'secondary' : 'primary'}
-                  size={48}
-                >
-                  <Feather
-                    name={getTypeIcon(type.code)}
-                    size={24}
-                    color={theme.colors.special.white}
-                  />
-                </Badge>
-                <Body
-                  color="primary"
+            {objectTypes.map((type) => {
+              const isSelected = selectedType === type.code;
+              const typeNameStyle = isSelected
+                ? StyleSheet.flatten([styles.typeName, styles.typeNameSelected])
+                : styles.typeName;
+
+              return (
+                <TouchableOpacity
+                  key={type.code}
                   style={[
-                    styles.typeName,
-                    selectedType === type.code ? styles.typeNameSelected : undefined,
+                    styles.typeCard,
+                    isSelected ? styles.typeCardSelected : undefined,
                   ]}
+                  onPress={() => handleSelectType(type.code)}
+                  activeOpacity={0.7}
                 >
-                  {type.nameVi}
-                </Body>
-                {type.description && (
-                  <Label color="primary" style={styles.typeDescription}>
-                    {type.description}
-                  </Label>
-                )}
-              </TouchableOpacity>
-            ))}
+                  <Badge
+                    variant={isSelected ? 'secondary' : 'primary'}
+                    size={48}
+                  >
+                    <Feather
+                      name={getTypeIcon(type.code)}
+                      size={24}
+                      color={theme.colors.special.white}
+                    />
+                  </Badge>
+                  <Body
+                    color="primary"
+                    style={typeNameStyle}
+                  >
+                    {type.nameVi}
+                  </Body>
+                  {type.description && (
+                    <Label color="primary" style={styles.typeDescription}>
+                      {type.description}
+                    </Label>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 

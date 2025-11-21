@@ -10,6 +10,51 @@ import {
   verticesToPolygon,
 } from '../types/survey';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
+
+/**
+ * Compress and optimize image before upload
+ * Reduces file size by resizing to max 1920px width and applying JPEG compression
+ *
+ * @param localUri - Local file URI of the image
+ * @returns Compressed image URI
+ */
+export async function compressImage(localUri: string): Promise<string> {
+  try {
+    // Validate file type before processing
+    const fileInfo = await FileSystem.getInfoAsync(localUri);
+    if (!fileInfo.exists) {
+      throw new Error('Tệp ảnh không tồn tại');
+    }
+
+    // Check file extension (basic validation)
+    const validExtensions = ['.jpg', '.jpeg', '.png'];
+    const hasValidExtension = validExtensions.some(ext =>
+      localUri.toLowerCase().endsWith(ext)
+    );
+
+    if (!hasValidExtension) {
+      throw new Error('Chỉ chấp nhận ảnh định dạng JPG hoặc PNG');
+    }
+
+    // Compress image: resize to max 1920px width, 70% quality
+    const compressed = await ImageManipulator.manipulateAsync(
+      localUri,
+      [{ resize: { width: 1920 } }], // Maintain aspect ratio, max width 1920px
+      {
+        compress: 0.7, // 70% quality - good balance between size and clarity
+        format: ImageManipulator.SaveFormat.JPEG
+      }
+    );
+
+    return compressed.uri;
+  } catch (error) {
+    console.error('Failed to compress image:', error);
+    // If compression fails, return original URI as fallback
+    // This ensures upload still works even if compression has issues
+    return localUri;
+  }
+}
 
 export const surveyService = {
   /**
@@ -24,7 +69,7 @@ export const surveyService = {
 
     if (error) throw error;
 
-    return data?.map(mission => ({
+    return (data?.map((mission: any) => ({
       id: mission.id,
       code: mission.code,
       name: mission.name,
@@ -37,7 +82,7 @@ export const surveyService = {
       createdBy: mission.created_by,
       createdAt: mission.created_at,
       updatedAt: mission.updated_at,
-    })) as SurveyMission[];
+    })) || []) as SurveyMission[];
   },
 
   /**
@@ -56,6 +101,22 @@ export const surveyService = {
   },
 
   /**
+   * Get all survey locations for current user
+   */
+  async getLocationsByUser(userId: string, limit: number = 100) {
+    const { data, error } = await supabase
+      .from('survey_locations')
+      .select('*')
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    return data?.map(location => this.mapLocationFromDb(location)) as SurveyLocation[];
+  },
+
+  /**
    * Get survey location by ID with related data
    */
   async getLocationById(locationId: string) {
@@ -66,6 +127,7 @@ export const surveyService = {
       .single();
 
     if (error) throw error;
+    if (!data) throw new Error('Location not found');
     return this.mapLocationFromDb(data);
   },
 
@@ -87,6 +149,7 @@ export const surveyService = {
         temp_name: location.tempName || null,
         description: location.description || null,
         object_type_code: location.objectTypeCode || null,
+        land_use_type_code: location.landUseTypeCode || null,
         raw_address: location.rawAddress || null,
         house_number: location.houseNumber || null,
         street_name: location.streetName || null,
@@ -95,7 +158,7 @@ export const surveyService = {
         gps_source: 'device',
         status: 'draft',
         client_local_id: location.clientLocalId || null,
-      })
+      } as any)
       .select()
       .single();
 
@@ -112,6 +175,7 @@ export const surveyService = {
     if (updates.tempName !== undefined) updateData.temp_name = updates.tempName;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.objectTypeCode !== undefined) updateData.object_type_code = updates.objectTypeCode;
+    if (updates.landUseTypeCode !== undefined) updateData.land_use_type_code = updates.landUseTypeCode;
     if (updates.rawAddress !== undefined) updateData.raw_address = updates.rawAddress;
     if (updates.houseNumber !== undefined) updateData.house_number = updates.houseNumber;
     if (updates.streetName !== undefined) updateData.street_name = updates.streetName;
@@ -121,15 +185,15 @@ export const surveyService = {
       updateData.has_rough_area = !!updates.roughArea;
     }
 
-    if (updates.status === 'synced') {
+    if (updates.status === 'submitted' || updates.status === 'pending') {
       updateData.submitted_at = new Date().toISOString();
     }
 
     updateData.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('survey_locations')
-      .update(updateData)
+      .update as any)(updateData)
       .eq('id', locationId)
       .select()
       .single();
@@ -139,16 +203,17 @@ export const surveyService = {
   },
 
   /**
-   * Submit survey location (change status to synced)
+   * Submit survey location (change status to submitted)
    */
   async submitLocation(locationId: string) {
     return this.updateLocation(locationId, {
-      status: 'synced',
+      status: 'submitted',
     });
   },
 
   /**
    * Upload media file to Supabase Storage
+   * Images are automatically compressed before upload to save bandwidth and storage
    */
   async uploadMedia(
     locationId: string,
@@ -159,13 +224,14 @@ export const surveyService = {
     const fileName = `${locationId}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
     const bucket = 'survey-media';
 
-    // Read file as base64
-    const base64 = await FileSystem.readAsStringAsync(localUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    // Compress image before upload if it's a photo
+    let uploadUri = localUri;
+    if (mediaType === 'photo') {
+      uploadUri = await compressImage(localUri);
+    }
 
-    // Convert base64 to blob
-    const response = await fetch(`data:image/jpeg;base64,${base64}`);
+    // Read file as blob directly
+    const response = await fetch(uploadUri);
     const blob = await response.blob();
 
     // Upload to Supabase Storage
@@ -190,22 +256,22 @@ export const surveyService = {
         media_type: mediaType,
         file_path: filePath,
         captured_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
     if (mediaError) throw mediaError;
 
     return {
-      id: mediaData.id,
-      surveyLocationId: mediaData.survey_location_id,
-      mediaType: mediaData.media_type,
-      filePath: mediaData.file_path,
-      thumbnailPath: mediaData.thumbnail_path,
-      capturedAt: mediaData.captured_at,
-      note: mediaData.note,
-      gpsPoint: mediaData.gps_point,
-      createdAt: mediaData.created_at,
+      id: (mediaData as any).id,
+      surveyLocationId: (mediaData as any).survey_location_id,
+      mediaType: (mediaData as any).media_type,
+      filePath: (mediaData as any).file_path,
+      thumbnailPath: (mediaData as any).thumbnail_path,
+      capturedAt: (mediaData as any).captured_at,
+      note: (mediaData as any).note,
+      gpsPoint: (mediaData as any).gps_point,
+      createdAt: (mediaData as any).created_at,
     };
   },
 
@@ -221,7 +287,7 @@ export const surveyService = {
 
     if (error) throw error;
 
-    return data?.map(media => ({
+    return data?.map((media: any) => ({
       id: media.id,
       surveyLocationId: media.survey_location_id,
       mediaType: media.media_type,
@@ -249,7 +315,9 @@ export const surveyService = {
       lng: v.lng,
     }));
 
-    const { error } = await supabase.from('survey_vertices').insert(verticesData);
+    const { error } = await supabase
+      .from('survey_vertices')
+      .insert(verticesData as any);
     if (error) throw error;
 
     // Update location with polygon
@@ -274,7 +342,7 @@ export const surveyService = {
 
     if (error) throw error;
 
-    return data?.map(v => ({
+    return data?.map((v: any) => ({
       id: v.id,
       surveyLocationId: v.survey_location_id,
       seq: v.seq,
@@ -282,6 +350,70 @@ export const surveyService = {
       lng: v.lng,
       createdAt: v.created_at,
     })) as SurveyVertex[];
+  },
+
+  /**
+   * Submit a complete survey (online mode)
+   * Creates location, uploads photos, and saves vertices
+   */
+  async submitSurvey(
+    survey: Partial<SurveyLocation>,
+    photos: Array<{ localUri: string; capturedAt?: string }>,
+    vertices: Array<{ lat: number; lng: number }>
+  ): Promise<{ locationId: string; success: boolean }> {
+    try {
+      // 1. Create location record first
+      if (!survey.gpsPoint) {
+        throw new Error('GPS location is required');
+      }
+
+      const { data: locationData, error: locationError } = await supabase
+        .from('survey_locations')
+        .insert({
+          client_local_id: survey.clientLocalId,
+          created_by: survey.createdBy!,
+          mission_id: survey.missionId || null,
+          province_code: survey.provinceCode || null,
+          district_code: survey.districtCode || null,
+          ward_code: survey.wardCode || null,
+          temp_name: survey.tempName || null,
+          description: survey.description || null,
+          object_type_code: survey.objectTypeCode || null,
+          land_use_type_code: survey.landUseTypeCode || null,
+          raw_address: survey.rawAddress || null,
+          house_number: survey.houseNumber || null,
+          street_name: survey.streetName || null,
+          gps_point: survey.gpsPoint as any,
+          gps_accuracy_m: survey.gpsAccuracyM,
+          gps_source: 'device',
+          status: 'pending',
+          submitted_at: new Date().toISOString(),
+        } as any)
+        .select()
+        .single();
+
+      if (locationError) throw locationError;
+      if (!locationData) throw new Error('Failed to create location');
+
+      const locationId = (locationData as any).id;
+
+      // 2. Upload photos
+      const photoUploadPromises = photos.map(photo =>
+        this.uploadMedia(locationId, photo.localUri, 'photo')
+      );
+      await Promise.all(photoUploadPromises);
+
+      // 3. Save vertices if provided
+      if (vertices.length >= 3) {
+        await this.saveVertices(locationId, vertices);
+      }
+
+      console.log('[SurveyService] Survey submitted successfully:', locationId);
+      return { locationId, success: true };
+    } catch (error) {
+      console.error('[SurveyService] Failed to submit survey:', error);
+      throw error;
+    }
   },
 
   /**
@@ -299,6 +431,7 @@ export const surveyService = {
       tempName: data.temp_name,
       description: data.description,
       objectTypeCode: data.object_type_code,
+      landUseTypeCode: data.land_use_type_code,
       rawAddress: data.raw_address,
       houseNumber: data.house_number,
       streetName: data.street_name,

@@ -114,12 +114,23 @@ export interface Database {
           province_code: string;
           district_code: string;
           ward_code: string;
+          location_identifier: string | null; // PP-DD-CC-NNNNNN format
           temp_name: string | null;
           description: string | null;
           object_type_code: string | null;
+          land_use_type_code: string | null;
           raw_address: string | null;
           house_number: string | null;
           street_name: string | null;
+          hamlet_village: string | null; // Thôn/Ấp/Bản/Xóm
+          land_plot_area_m2: number | null; // Diện tích thửa đất
+          building_area_m2: number | null; // Diện tích xây dựng
+          land_use_certificate_number: string | null; // Số GCN QSDĐ
+          owner_name: string | null;
+          owner_id_number: string | null; // CCCD/CMND
+          owner_phone: string | null;
+          representative_name: string | null;
+          survey_notes: string | null;
           gps_point: GeographyPoint | null;
           gps_accuracy_m: number | null;
           gps_source: string | null;
@@ -140,15 +151,26 @@ export interface Database {
           mission_id?: string | null;
           created_by: string;
           assigned_to?: string | null;
-          province_code: string;
-          district_code: string;
-          ward_code: string;
+          province_code?: string;
+          district_code?: string;
+          ward_code?: string;
+          location_identifier?: string | null;
           temp_name?: string | null;
           description?: string | null;
           object_type_code?: string | null;
+          land_use_type_code?: string | null;
           raw_address?: string | null;
           house_number?: string | null;
           street_name?: string | null;
+          hamlet_village?: string | null;
+          land_plot_area_m2?: number | null;
+          building_area_m2?: number | null;
+          land_use_certificate_number?: string | null;
+          owner_name?: string | null;
+          owner_id_number?: string | null;
+          owner_phone?: string | null;
+          representative_name?: string | null;
+          survey_notes?: string | null;
           gps_point?: GeographyPoint | null;
           gps_accuracy_m?: number | null;
           gps_source?: string | null;
@@ -172,12 +194,23 @@ export interface Database {
           province_code?: string;
           district_code?: string;
           ward_code?: string;
+          location_identifier?: string | null;
           temp_name?: string | null;
           description?: string | null;
           object_type_code?: string | null;
+          land_use_type_code?: string | null;
           raw_address?: string | null;
           house_number?: string | null;
           street_name?: string | null;
+          hamlet_village?: string | null;
+          land_plot_area_m2?: number | null;
+          building_area_m2?: number | null;
+          land_use_certificate_number?: string | null;
+          owner_name?: string | null;
+          owner_id_number?: string | null;
+          owner_phone?: string | null;
+          representative_name?: string | null;
+          survey_notes?: string | null;
           gps_point?: GeographyPoint | null;
           gps_accuracy_m?: number | null;
           gps_source?: string | null;
@@ -354,6 +387,76 @@ export interface Database {
           parent_code?: string | null;
           full_name?: string | null;
           short_name?: string | null;
+        };
+      };
+      ref_land_use_types: {
+        Row: {
+          code: string;
+          name_vi: string;
+          category: string;
+          description: string | null;
+          parent_code: string | null;
+          is_active: boolean;
+          version: string;
+          sort_order: number;
+        };
+        Insert: {
+          code: string;
+          name_vi: string;
+          category: string;
+          description?: string | null;
+          parent_code?: string | null;
+          is_active?: boolean;
+          version?: string;
+          sort_order?: number;
+        };
+        Update: {
+          code?: string;
+          name_vi?: string;
+          category?: string;
+          description?: string | null;
+          parent_code?: string | null;
+          is_active?: boolean;
+          version?: string;
+          sort_order?: number;
+        };
+      };
+      ref_cadastral_versions: {
+        Row: {
+          id: string;
+          version: string;
+          release_date: string;
+          description: string;
+          source: string;
+          change_count: number;
+          is_active: boolean;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          version: string;
+          release_date: string;
+          description: string;
+          source: string;
+          change_count?: number;
+          is_active?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          version?: string;
+          release_date?: string;
+          description?: string;
+          source?: string;
+          change_count?: number;
+          is_active?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
       };
     };

@@ -41,7 +41,7 @@ async function testConnection() {
 
     console.log(`✓ Object types: ${objectTypes?.length || 0} types loaded`);
     if (objectTypes && objectTypes.length > 0) {
-      console.log(`  Sample: ${objectTypes[0].name_vi}`);
+      console.log(`  Sample: ${(objectTypes[0] as any).name_vi}`);
     }
 
     // Test 4: Check admin units
@@ -56,7 +56,7 @@ async function testConnection() {
 
     console.log(`✓ Admin units: ${adminUnits?.length || 0} provinces loaded`);
     if (adminUnits && adminUnits.length > 0) {
-      console.log(`  Sample: ${adminUnits[0].name}`);
+      console.log(`  Sample: ${(adminUnits[0] as any).name}`);
     }
 
     // Test 5: Check if profiles table exists

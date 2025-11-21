@@ -13,12 +13,20 @@ import {
   DashboardScreen,
   StartSurveyScreen,
   GPSCaptureScreen,
+  PhotoCaptureScreen,
+  OwnerInfoScreen,
+  UsageInfoScreen,
+  PolygonDrawScreen,
+  ReviewSubmitScreen,
+  SubmissionSuccessScreen,
+  HistoryScreen,
+  SettingsScreen,
+  DraftsScreen,
 } from '../screens';
 import { theme } from '../theme';
 import { Body } from '../components';
 
 // Import survey screens (to be created)
-// import { PhotoCaptureScreen } from '../screens/PhotoCaptureScreen';
 // import { ObjectInfoScreen } from '../screens/ObjectInfoScreen';
 // import { PolygonDrawScreen } from '../screens/PolygonDrawScreen';
 // import { ReviewSubmitScreen } from '../screens/ReviewSubmitScreen';
@@ -32,11 +40,14 @@ export type RootStackParamList = {
   StartSurvey: undefined;
   GPSCapture: { surveyId: string };
   PhotoCapture: { surveyId: string };
-  ObjectInfo: { surveyId: string };
+  OwnerInfo: { surveyId: string };
+  UsageInfo: { surveyId: string };
   PolygonDraw: { surveyId: string };
   ReviewSubmit: { surveyId: string };
+  SubmissionSuccess: { wasOnline: boolean };
   History: undefined;
   Settings: undefined;
+  Drafts: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -79,12 +90,15 @@ export const AppNavigator: React.FC = () => {
             {/* Survey Flow */}
             <Stack.Screen name="StartSurvey" component={StartSurveyScreen} />
             <Stack.Screen name="GPSCapture" component={GPSCaptureScreen} />
-            {/* <Stack.Screen name="PhotoCapture" component={PhotoCaptureScreen} /> */}
-            {/* <Stack.Screen name="ObjectInfo" component={ObjectInfoScreen} /> */}
-            {/* <Stack.Screen name="PolygonDraw" component={PolygonDrawScreen} /> */}
-            {/* <Stack.Screen name="ReviewSubmit" component={ReviewSubmitScreen} /> */}
-            {/* <Stack.Screen name="History" component={HistoryScreen} /> */}
-            {/* <Stack.Screen name="Settings" component={SettingsScreen} /> */}
+            <Stack.Screen name="PhotoCapture" component={PhotoCaptureScreen} />
+            <Stack.Screen name="OwnerInfo" component={OwnerInfoScreen} />
+            <Stack.Screen name="UsageInfo" component={UsageInfoScreen} />
+            <Stack.Screen name="PolygonDraw" component={PolygonDrawScreen} />
+            <Stack.Screen name="ReviewSubmit" component={ReviewSubmitScreen} />
+            <Stack.Screen name="SubmissionSuccess" component={SubmissionSuccessScreen} />
+            <Stack.Screen name="History" component={HistoryScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Drafts" component={DraftsScreen} />
           </>
         )}
       </Stack.Navigator>

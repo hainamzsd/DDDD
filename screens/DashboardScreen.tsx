@@ -17,6 +17,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import NetInfo from '@react-native-community/netinfo';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
+import { useSyncStore } from '../store/syncStore';
+import { getAllDrafts } from '../store/surveyStore';
 import { theme } from '../theme';
 import {
   H3,
@@ -36,8 +38,10 @@ type DashboardNavigationProp = StackNavigationProp<
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
   const { user, signOut } = useAuthStore();
+  const { isOnline: syncIsOnline, getPendingCount } = useSyncStore();
   const [isOnline, setIsOnline] = useState(true);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [draftCount, setDraftCount] = useState(0);
 
   // Monitor network connectivity
   useEffect(() => {
@@ -48,11 +52,32 @@ export const DashboardScreen: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // TODO: Get pending sync count from sync store
+  // Get pending sync count from sync store and draft count
   useEffect(() => {
-    // This will be implemented when we create the sync store
-    setPendingSyncCount(0);
-  }, []);
+    const loadCounts = async () => {
+      const count = getPendingCount();
+      setPendingSyncCount(count);
+
+      // Update online status from sync store
+      setIsOnline(syncIsOnline);
+
+      // Load draft count
+      const drafts = await getAllDrafts();
+      setDraftCount(drafts.length);
+    };
+
+    loadCounts();
+  }, [getPendingCount, syncIsOnline]);
+
+  // Reload draft count when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', async () => {
+      const drafts = await getAllDrafts();
+      setDraftCount(drafts.length);
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -77,23 +102,15 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const handleViewHistory = () => {
-    // TODO: Navigate to History screen
-    Alert.alert(
-      'Lịch sử khảo sát',
-      'Tính năng này đang được phát triển',
-      [{ text: 'OK' }]
-    );
-    // navigation.navigate('History');
+    navigation.navigate('History');
   };
 
   const handleSettings = () => {
-    // TODO: Navigate to Settings screen
-    Alert.alert(
-      'Cài đặt',
-      'Tính năng này đang được phát triển',
-      [{ text: 'OK' }]
-    );
-    // navigation.navigate('Settings');
+    navigation.navigate('Settings');
+  };
+
+  const handleViewDrafts = () => {
+    navigation.navigate('Drafts');
   };
 
   return (
@@ -208,6 +225,30 @@ export const DashboardScreen: React.FC = () => {
           </H3>
 
           <View style={styles.navigationGrid}>
+            {/* Drafts Card */}
+            <TouchableOpacity
+              style={styles.navCard}
+              onPress={handleViewDrafts}
+              activeOpacity={0.8}
+            >
+              <Badge variant="warning" size={48}>
+                <Feather name="edit" size={24} color={theme.colors.special.white} />
+              </Badge>
+              {draftCount > 0 && (
+                <View style={styles.navCardBadge}>
+                  <Label style={styles.navCardBadgeText}>{draftCount}</Label>
+                </View>
+              )}
+              <Body color="primary" style={styles.navCardTitle}>
+                Bản nháp
+              </Body>
+              <Label color="primary" style={styles.navCardDescription}>
+                {draftCount > 0
+                  ? `${draftCount} khảo sát chưa hoàn thành`
+                  : 'Không có bản nháp'}
+              </Label>
+            </TouchableOpacity>
+
             {/* History Card */}
             <TouchableOpacity
               style={styles.navCard}
@@ -401,7 +442,9 @@ const styles = StyleSheet.create({
   },
   navigationGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: theme.spacing.base,
   },
   navCard: {
     width: '48%',
@@ -409,7 +452,25 @@ const styles = StyleSheet.create({
     padding: theme.spacing.base,
     borderRadius: theme.borderRadius.xl,
     alignItems: 'center',
+    position: 'relative',
     ...theme.shadows.sm,
+  },
+  navCardBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: theme.colors.secondary[600],
+    borderRadius: theme.borderRadius.full,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  navCardBadgeText: {
+    color: theme.colors.special.white,
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: '700',
   },
   navCardTitle: {
     fontWeight: '600',

@@ -178,6 +178,11 @@ export const colors = {
       border: 'rgba(255, 255, 255, 0.3)',
     },
   },
+
+  // Common colors (shortcuts)
+  white: '#ffffff',
+  black: '#000000',
+  transparent: 'transparent',
 };
 
 // Export commonly used color combinations

@@ -15,6 +15,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import { useSurveyStore } from '../store/surveyStore';
 import { gpsToGeographyPoint } from '../types/survey';
@@ -28,6 +29,7 @@ import {
   Badge,
 } from '../components';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { validateGPSCoordinates } from '../utils/validation';
 
 type GPSCaptureNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -86,9 +88,24 @@ export const GPSCaptureScreen: React.FC = () => {
 
       setLocation(currentLocation);
       console.log('[GPSCapture] Location captured:', currentLocation.coords);
+
+      // Trigger success haptic feedback
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success
+      ).catch(() => {
+        // Silently fail if haptics not supported
+      });
     } catch (error: any) {
       console.error('[GPSCapture] Error capturing location:', error);
       setError('Không thể lấy vị trí. Vui lòng thử lại.');
+
+      // Trigger error haptic feedback
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Error
+      ).catch(() => {
+        // Silently fail if haptics not supported
+      });
+
       Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại. Vui lòng thử lại.', [
         { text: 'OK' },
       ]);
@@ -111,10 +128,23 @@ export const GPSCaptureScreen: React.FC = () => {
     }
 
     try {
+      const { latitude, longitude } = location.coords;
+
+      // Validate GPS coordinates against Vietnam boundaries
+      const validation = validateGPSCoordinates(latitude, longitude);
+      if (!validation.isValid) {
+        Alert.alert(
+          'Tọa độ không hợp lệ',
+          validation.errorMessage || 'Tọa độ nằm ngoài phạm vi Việt Nam',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
       // Convert location to GeoJSON format
       const gpsPoint = gpsToGeographyPoint({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+        latitude,
+        longitude,
         accuracy: location.coords.accuracy,
         altitude: location.coords.altitude,
         timestamp: location.timestamp,
@@ -309,10 +339,7 @@ export const GPSCaptureScreen: React.FC = () => {
                     </Label>
                     <Body
                       color="primary"
-                      style={[
-                        styles.coordValue,
-                        { color: getAccuracyColor(location.coords.accuracy) } as any,
-                      ]}
+                      style={styles.coordValue}
                     >
                       ±{location.coords.accuracy?.toFixed(1)}m ({getAccuracyLabel(location.coords.accuracy)})
                     </Body>

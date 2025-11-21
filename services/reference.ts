@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { ObjectType, AdminUnit } from '@/types/survey';
+import { ObjectType, AdminUnit } from '../types/survey';
+import type { Database } from '../types/database';
 
 export const referenceService = {
   /**
@@ -9,17 +10,17 @@ export const referenceService = {
     const { data, error } = await supabase
       .from('ref_object_types')
       .select('*')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true }) as { data: Database['public']['Tables']['ref_object_types']['Row'][] | null; error: any };
 
     if (error) throw error;
 
-    return data?.map(type => ({
+    return (data || []).map(type => ({
       code: type.code,
       nameVi: type.name_vi,
       description: type.description,
       groupCode: type.group_code,
       sortOrder: type.sort_order,
-    })) as ObjectType[];
+    }));
   },
 
   /**
@@ -30,17 +31,17 @@ export const referenceService = {
       .from('ref_object_types')
       .select('*')
       .eq('group_code', groupCode)
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true }) as { data: Database['public']['Tables']['ref_object_types']['Row'][] | null; error: any };
 
     if (error) throw error;
 
-    return data?.map(type => ({
+    return (data || []).map(type => ({
       code: type.code,
       nameVi: type.name_vi,
       description: type.description,
       groupCode: type.group_code,
       sortOrder: type.sort_order,
-    })) as ObjectType[];
+    }));
   },
 
   /**
@@ -56,18 +57,18 @@ export const referenceService = {
       query = query.eq('parent_code', parentCode);
     }
 
-    const { data, error } = await query.order('name', { ascending: true });
+    const { data, error } = await query.order('name', { ascending: true }) as { data: Database['public']['Tables']['ref_admin_units']['Row'][] | null; error: any };
 
     if (error) throw error;
 
-    return data?.map(unit => ({
+    return (data || []).map(unit => ({
       code: unit.code,
       name: unit.name,
       level: unit.level,
       parentCode: unit.parent_code,
       fullName: unit.full_name,
       shortName: unit.short_name,
-    })) as AdminUnit[];
+    }));
   },
 
   /**
@@ -78,12 +79,14 @@ export const referenceService = {
       .from('ref_admin_units')
       .select('*')
       .eq('code', code)
-      .single();
+      .single() as { data: Database['public']['Tables']['ref_admin_units']['Row'] | null; error: any };
 
     if (error) {
       if (error.code === 'PGRST116') return null; // Not found
       throw error;
     }
+
+    if (!data) return null;
 
     return {
       code: data.code,

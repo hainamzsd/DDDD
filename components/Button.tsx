@@ -8,6 +8,7 @@ import {
   TextStyle,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { colors, spacing, borderRadius, shadows, textStyles } from '../theme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
@@ -40,6 +41,22 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
 }) => {
+  const handlePress = () => {
+    // Trigger haptic feedback on button press
+    // Use light impact for most buttons, medium for primary/secondary
+    if (!disabled && !loading) {
+      const impactStyle = variant === 'primary' || variant === 'secondary'
+        ? Haptics.ImpactFeedbackStyle.Medium
+        : Haptics.ImpactFeedbackStyle.Light;
+
+      Haptics.impactAsync(impactStyle).catch(() => {
+        // Silently fail if haptics are not supported
+      });
+    }
+
+    onPress();
+  };
+
   const buttonStyle = [
     styles.base,
     styles[variant],
@@ -85,7 +102,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       style={buttonStyle}
       activeOpacity={0.7}

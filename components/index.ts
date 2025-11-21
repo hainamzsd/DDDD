@@ -51,3 +51,6 @@ export {
   Heading4 as H4,
 } from './Typography';
 export type { TypographyProps, TypographyVariant, TypographyColor } from './Typography';
+
+// Network Status Components
+export { OfflineBanner } from './OfflineBanner';

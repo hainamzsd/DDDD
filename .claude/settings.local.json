@@ -3,7 +3,20 @@
     "allow": [
       "Bash(node verify-setup.js:*)",
       "Bash(npm install:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Implement LocationID Tracker mobile app foundation\n\nImplement complete foundation for the LocationID Tracker (C06) mobile app - a React Native/Expo application for Vietnamese commune police officers to perform field surveys of physical locations.\n\nMajor Features Implemented:\n- Authentication system with 12-digit police ID conversion to email format\n- Offline-first architecture with local storage and sync queue\n- Complete UI component library with government-themed design\n- Supabase integration with PostGIS for spatial data\n- Zustand state management (auth, survey, sync)\n- Complete type system with database and application types\n\nComponents Added:\n- Badge, Button, Card, Header, Input, Typography, SafeScreen\n- All components fully typed and documented\n\nScreens Added:\n- LoginScreen with ID number authentication\n- DashboardScreen with mission overview\n- GPSCaptureScreen for location capture\n- StartSurveyScreen for survey initialization\n\nServices:\n- auth.ts: Authentication with ID→email conversion\n- supabase.ts: Supabase client configuration\n- survey.ts: Survey data operations\n- reference.ts: Reference data management\n\nStore:\n- authStore: Authentication state management\n- surveyStore: Active survey state\n- syncStore: Offline sync queue\n\nDatabase:\n- Complete PostgreSQL schema with PostGIS extensions\n- Row Level Security policies\n- Seed data for testing\n\nDocumentation:\n- CLAUDE.md: Project instructions and architecture\n- AUTH_QUICKSTART.md: Authentication setup guide\n- DATABASE_SETUP.md: Database configuration\n- Component/Screen READMEs with API documentation\n\nTech Stack:\n- Expo (React Native)\n- Supabase (PostgreSQL + PostGIS)\n- TypeScript\n- Zustand\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git config:*)",
+      "WebFetch(domain:provinces.open-api.vn)",
+      "Bash(node scripts/fetch-admin-units.js:*)",
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "Bash(node -p:*)",
+      "Bash(node scripts/fetch-admin-full.js:*)",
+      "Bash(node scripts/fetch-admin-full-v2.js:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

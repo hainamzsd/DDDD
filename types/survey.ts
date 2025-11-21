@@ -35,7 +35,10 @@ export interface SurveyMission {
   updatedAt: string;
 }
 
-// Survey Location types
+/**
+ * Survey Location
+ * Represents a surveyed physical location with GPS coordinates, photos, and metadata
+ */
 export interface SurveyLocation {
   id: string;
   missionId: string | null;
@@ -47,6 +50,8 @@ export interface SurveyLocation {
   tempName: string | null;
   description: string | null;
   objectTypeCode: string | null;
+  /** Official Vietnamese cadastral code (e.g., 'NNG.LUA', 'PNN.DO.TT') - see LandUseType */
+  landUseTypeCode: string | null;
   rawAddress: string | null;
   houseNumber: string | null;
   streetName: string | null;
@@ -126,6 +131,41 @@ export interface AdminUnit {
   parentCode: string | null;
   fullName: string | null;
   shortName: string | null;
+}
+
+/**
+ * Land Use Type (Cadastral Category)
+ *
+ * Official Vietnamese cadastral codes per:
+ * - Land Law 2013 (Law No. 45/2013/QH13)
+ * - Decree 43/2014/NĐ-CP
+ * - Circular 02/2015/TT-BTNMT
+ *
+ * @example Official codes:
+ * - Agricultural: 'NNG', 'NNG.LUA', 'NNG.CKH', 'NNG.CLN'
+ * - Residential: 'PNN.DO', 'PNN.DO.TT', 'PNN.DO.NT'
+ * - Commercial: 'PNN.SXKD', 'PNN.SXKD.CN', 'PNN.SXKD.TMCT'
+ * - Public: 'PNN.CC', 'PNN.CC.GT', 'PNN.CC.TL'
+ * - Unused: 'CSD', 'CSD.KT'
+ *
+ * @see supabase/seed-land-use-types-official.sql
+ * @see docs/CADASTRAL_REGULATIONS.md
+ */
+export interface LandUseType {
+  /** Official cadastral code (e.g., 'NNG.LUA', 'PNN.DO.TT') */
+  code: string;
+  /** Vietnamese name (e.g., 'Đất trồng lúa', 'Đất ở tại đô thị') */
+  nameVi: string;
+  /** Detailed description */
+  description: string | null;
+  /** Category group (e.g., 'agricultural', 'residential', 'commercial', 'public', 'unused') */
+  category: string | null;
+  /** Parent code for hierarchical structure (e.g., 'PNN.DO' is parent of 'PNN.DO.TT') */
+  parentCode: string | null;
+  /** Whether this type is active and selectable */
+  isActive: boolean;
+  /** Display order */
+  sortOrder: number;
 }
 
 // Draft types for local storage

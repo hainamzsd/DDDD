@@ -14,7 +14,7 @@ interface SurveyState {
   currentVertices: SurveyVertex[];
 
   // Survey flow state
-  step: 'start' | 'gps' | 'photos' | 'info' | 'polygon' | 'review';
+  step: 'start' | 'gps' | 'photos' | 'info' | 'usage' | 'polygon' | 'review';
   isLoading: boolean;
   error: string | null;
 
@@ -27,6 +27,7 @@ interface SurveyState {
   setStep: (step: SurveyState['step']) => void;
   saveDraft: () => Promise<void>;
   loadDraft: (surveyId: string) => Promise<void>;
+  submitSurvey: (isOnline: boolean) => Promise<{ success: boolean; locationId?: string }>;
   clearCurrent: () => Promise<void>;
   setError: (error: string | null) => void;
 }
@@ -174,6 +175,89 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
         error: error.message || 'Failed to load draft',
         isLoading: false,
       });
+    }
+  },
+
+  // Submit survey (online or offline)
+  submitSurvey: async (isOnline: boolean) => {
+    const { currentSurvey, currentPhotos, currentVertices } = get();
+
+    if (!currentSurvey) {
+      throw new Error('No active survey to submit');
+    }
+
+    // Validate required fields
+    if (!currentSurvey.gpsPoint) {
+      throw new Error('GPS location is required');
+    }
+    if (!currentPhotos || currentPhotos.length === 0) {
+      throw new Error('At least one photo is required');
+    }
+
+    set({ isLoading: true, error: null });
+
+    try {
+      if (isOnline) {
+        // Online: Submit directly to Supabase
+        const { surveyService } = await import('../services/survey');
+
+        // Update survey status to pending
+        await get().updateSurvey({
+          status: 'pending',
+          submittedAt: new Date().toISOString(),
+        });
+
+        const photos = currentPhotos.map(p => ({
+          localUri: p.localUri || p.filePath,
+          capturedAt: p.capturedAt || undefined,
+        }));
+
+        const vertices = currentVertices.map(v => ({
+          lat: v.lat,
+          lng: v.lng,
+        }));
+
+        const result = await surveyService.submitSurvey(currentSurvey, photos, vertices);
+
+        set({ isLoading: false });
+        console.log('[SurveyStore] Survey submitted online:', result.locationId);
+        return { success: true, locationId: result.locationId };
+      } else {
+        // Offline: Add to sync queue
+        const { useSyncStore } = await import('./syncStore');
+
+        // Update survey status
+        await get().updateSurvey({
+          status: 'pending',
+          submittedAt: new Date().toISOString(),
+        });
+
+        // Add survey data to queue
+        await useSyncStore.getState().addToQueue({
+          type: 'survey',
+          surveyId: currentSurvey.clientLocalId!,
+          data: {
+            ...currentSurvey,
+            photos: currentPhotos.map(p => ({
+              localUri: p.localUri || p.filePath,
+              capturedAt: p.capturedAt,
+            })),
+            vertices: currentVertices.map(v => ({
+              lat: v.lat,
+              lng: v.lng,
+            })),
+          },
+          maxRetries: 5,
+        });
+
+        set({ isLoading: false });
+        console.log('[SurveyStore] Survey queued for sync:', currentSurvey.clientLocalId);
+        return { success: true };
+      }
+    } catch (error: any) {
+      set({ isLoading: false, error: error.message || 'Submission failed' });
+      console.error('[SurveyStore] Survey submission failed:', error);
+      throw error;
     }
   },
 
